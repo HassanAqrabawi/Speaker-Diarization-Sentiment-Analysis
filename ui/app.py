@@ -72,6 +72,8 @@ def create_app() -> gr.Blocks:
                             sources=["upload", "microphone"],
                             type="filepath",
                             label="Audio File",
+                            streaming=False,
+                            autoplay=False,
                         )
                         num_speakers = gr.Slider(
                             minimum=0,
