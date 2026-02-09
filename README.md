@@ -11,25 +11,30 @@
 ## Features
 
 ### Speaker diarization
+
 - **Whisper** for transcription (local; no API key required).
 - **pyannote.audio** + **SpeechBrain** for speaker embeddings and clustering.
 - Configurable number of speakers; optional Whisper model size (tiny → large-v3) for speed vs accuracy.
 
 ### Sentiment analysis
+
 - **VADER** (primary), **DistilBERT** (SST-2), and **emotion detection** (Hugging Face) on transcribed text.
 - Per-segment and per-speaker sentiment; overall conversation sentiment and volatility.
 - Runs locally; no external sentiment API.
 
 ### Conversation quality
+
 - **Overall quality score** (0–100) from pacing, turn-taking, and sentiment.
 - **Conversation flow**: speaker turns, turns per minute, speakers detected, duration.
 - **Recommendations** (e.g., pacing, turn length, negative sentiment) when applicable.
 
 ### Inputs
+
 - **Audio file**: WAV, MP3, M4A, FLAC, etc. (upload or microphone in the UI).
 - **YouTube**: paste URL; audio is downloaded (pytube with yt-dlp fallback), then processed like an audio file.
 
 ### UI
+
 - **Gradio** web app: upload audio or paste YouTube URL, choose options, view transcript, sentiment report, quality summary, and visualizations.
 - Optional JSON report download.
 
@@ -64,20 +69,22 @@ The **core_logic** package is the single backend: all AI and pipeline logic live
 ## Installation
 
 ### Prerequisites
+
 - **Python 3.8+**
 - **8GB+ RAM** (16GB recommended for larger Whisper models)
 - **GPU** (optional but recommended; CUDA for PyTorch)
-- **Hugging Face token** (for pyannote/some models; set `HF_TOKEN`)
+- **Hugging Face token** (only if you get a "gated model" or login error when loading speaker models; see step 5)
 
 ### Steps
 
 1. **Clone the repo**
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/TOPAZ.git
-   cd TOPAZ
-   ```
 
+   ```bash
+   git clone https://github.com/HassanAqrabawi/Speaker-Diarization-Sentiment-Analysis.git
+   cd Speaker-Diarization-Sentiment-Analysis
+   ```
 2. **Create and activate a virtual environment**
+
    ```bash
    python -m venv venv
    # Windows:
@@ -85,33 +92,38 @@ The **core_logic** package is the single backend: all AI and pipeline logic live
    # Linux/macOS:
    source venv/bin/activate
    ```
-
 3. **Install dependencies**
+
    ```bash
    pip install -r requirements.txt
    ```
-
 4. **Download language data**
+
    ```bash
    python -m spacy download en_core_web_sm
    python -c "import nltk; nltk.download('vader_lexicon')"
    ```
+5. **Set Hugging Face token (only if needed)**  
+   You only need this if the app fails with a "gated model" or "login required" error when loading speaker (pyannote/speechbrain) models. Get a token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens), then set it so your shell can see it:
 
-5. **Set Hugging Face token** (required for pyannote/some Hugging Face models)
-   ```bash
-   # Windows (PowerShell):
-   $env:HF_TOKEN="your_token_here"
-   # Linux/macOS:
-   export HF_TOKEN=your_token_here
-   ```
+   - **Current terminal session only**  
+     - Windows (PowerShell): `$env:HF_TOKEN="hf_your_token_here"`  
+     - Linux/macOS: `export HF_TOKEN=hf_your_token_here`
+   - **Permanently (Windows)**  
+     Open "Environment Variables" (search in Start), add a new User variable: name `HF_TOKEN`, value `hf_your_token_here`.
+   - **Permanently (Linux/macOS)**  
+     Add `export HF_TOKEN=hf_your_token_here` to your `~/.bashrc` or `~/.zshrc`.
 
 6. **Run the app**
+
    ```bash
    python main.py
    ```
+
    Open the URL shown (default: http://127.0.0.1:7860).
 
 ### Optional: YouTube fallback
+
 For more reliable YouTube downloads, **yt-dlp** is recommended and listed in `requirements.txt`. If pytube fails, the pipeline will try yt-dlp automatically.
 
 ---
@@ -119,6 +131,7 @@ For more reliable YouTube downloads, **yt-dlp** is recommended and listed in `re
 ## Usage
 
 ### Web UI
+
 1. Run `python main.py`.
 2. **Audio File** tab: upload an audio file (or record), set number of speakers (0 = auto), choose Whisper model size, then click **Analyze Audio**.
 3. **YouTube Video** tab: paste a YouTube URL, then click **Analyze YouTube Video**.
@@ -169,16 +182,16 @@ No Gradio or UI code is required when using `AdvancedTOPAZ` from `core_logic.pip
 
 ## Analytics and metrics
 
-- **Overall quality score (0–100)**  
+- **Overall quality score (0–100)**
   Based on conversation flow (pacing, turns per minute), turn-taking efficiency, and sentiment. Single-speaker or very short conversations may score low or zero.
-
 - **Conversation flow**
+
   - **Speaker turns** – number of speaker changes.
   - **Turns per minute** – speaker changes per minute.
   - **Speakers detected** – number of distinct speakers.
   - **Duration** – total conversation length.
-
 - **Sentiment**
+
   - Per-speaker and overall averages; positive/negative/neutral ratios; sentiment range and volatility.
   - Based on transcribed text only (no tone of voice).
 
@@ -200,11 +213,6 @@ See **requirements.txt** for versions.
 
 ---
 
-## License
-
-This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
-
----
 
 ## Acknowledgments
 
