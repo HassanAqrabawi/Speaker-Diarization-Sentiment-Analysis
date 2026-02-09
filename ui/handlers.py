@@ -69,13 +69,17 @@ def _create_quality_summary_markdown(quality_metrics: dict) -> str:
     flow = quality_metrics.get("conversation_flow", {}) or {}
     if flow:
         summary += "### 🔄 Conversation Flow\n"
-        summary += f"- **Interruption Rate:** {flow.get('interruption_rate', 0):.1%}\n"
-        summary += f"- **Average Response Time:** {flow.get('avg_response_time', 0):.1f}s\n\n"
-    
-    balance = quality_metrics.get("speaker_balance", {}) or {}
-    if balance:
-        summary += "### ⚖️ Speaker Balance\n"
-        summary += f"- **Balance Score:** {balance.get('balance_score', 0):.2f}\n\n"
+        summary += f"- **Speaker Turns:** {flow.get('speaker_turns', 0)}\n"
+        summary += f"- **Turns per Minute:** {flow.get('turns_per_minute', 0):.1f}\n"
+        num_speakers = flow.get('num_speakers', 0)
+        if num_speakers:
+            summary += f"- **Speakers Detected:** {num_speakers}\n"
+        total_dur = flow.get('total_duration', 0)
+        if total_dur:
+            mins = int(total_dur // 60)
+            secs = int(total_dur % 60)
+            summary += f"- **Duration:** {mins}m {secs}s\n"
+        summary += "\n"
     
     recommendations = quality_metrics.get("recommendations", []) or []
     if recommendations:

@@ -56,7 +56,6 @@ class ConversationAnalytics:
 
         quality_metrics = {
             'conversation_flow': self._analyze_conversation_flow(segments),
-            'speaker_balance': self._analyze_speaker_balance(segments),
             'response_patterns': self._analyze_response_patterns(segments),
             'sentiment_trends': self._analyze_sentiment_trends(sentiment_data),
             'total_speakers': total_speakers,
@@ -74,57 +73,33 @@ class ConversationAnalytics:
         return quality_metrics
 
     def _analyze_conversation_flow(self, segments: List[Dict]) -> Dict:
-        """Analyze conversation flow and interruptions."""
+        """
+        Analyze conversation flow using only metrics that are reliably
+        measurable from Whisper's sequential, non-overlapping segments.
+        """
         if not segments:
             return {}
 
-        # Check if single speaker conversation
-        unique_speakers = set(segment.get('speaker', 'Unknown') for segment in segments)
-        is_single_speaker = len(unique_speakers) == 1
+        unique_speakers = set(seg.get('speaker', 'Unknown') for seg in segments)
 
-        # If single speaker, no interruptions possible
-        if is_single_speaker:
-            return {
-                'total_interruptions': 0,
-                'total_overlap_duration': 0,
-                'avg_response_time': 0,
-                'interruption_rate': 0.0
-            }
-
-        interruptions = 0
-        overlaps = 0
-        response_times = []
-
+        # Count speaker changes
+        speaker_changes = 0
         for i in range(1, len(segments)):
-            prev_segment = segments[i - 1]
-            curr_segment = segments[i]
+            if segments[i - 1].get('speaker') != segments[i].get('speaker'):
+                speaker_changes += 1
 
-            # Only count interruptions if speakers are actually different
-            if prev_segment.get('speaker') != curr_segment.get('speaker'):
-                # Check for interruptions (speaker change with overlap)
-                if prev_segment.get('end', 0) > curr_segment.get('start', 0):
-                    interruptions += 1
-                    overlaps += prev_segment.get('end', 0) - curr_segment.get('start', 0)
+        # Total conversation duration
+        total_duration = 0.0
+        if segments:
+            total_duration = segments[-1].get('end', 0) - segments[0].get('start', 0)
 
-                # Calculate response time
-                response_time = curr_segment.get('start', 0) - prev_segment.get('end', 0)
-                if response_time > 0:
-                    response_times.append(response_time)
-
-        avg_response_time = np.mean(response_times) if response_times else 0
-
-        # Calculate interruption rate as interruptions per speaker change
-        speaker_changes = sum(
-            1 for i in range(1, len(segments))
-            if segments[i - 1].get('speaker') != segments[i].get('speaker')
-        )
-        interruption_rate = interruptions / speaker_changes if speaker_changes > 0 else 0
+        turns_per_min = (speaker_changes / (total_duration / 60.0)) if total_duration > 0 else 0.0
 
         return {
-            'total_interruptions': interruptions,
-            'total_overlap_duration': overlaps,
-            'avg_response_time': avg_response_time,
-            'interruption_rate': interruption_rate
+            'speaker_turns': speaker_changes,
+            'turns_per_minute': round(turns_per_min, 1),
+            'total_duration': round(total_duration, 1),
+            'num_speakers': len(unique_speakers),
         }
 
     def _analyze_speaker_balance(self, segments: List[Dict]) -> Dict:
@@ -226,69 +201,78 @@ class ConversationAnalytics:
         if total_speakers < 2:
             return 0.0
 
-        score = 25  # base score
+        score = 30  # base score
 
-        # Flow metrics (15 points)
+        # Flow metrics (25 points) – based on pacing / turn-taking
         flow = metrics.get('conversation_flow', {})
-        interruption_rate = flow.get('interruption_rate', 0)
-        score += max(0, 15 - interruption_rate * 30)
+        turns_per_min = flow.get('turns_per_minute', 0)
+        # Good pacing: roughly 4-15 turns/min for a natural conversation
+        if 4 <= turns_per_min <= 15:
+            score += 25
+        elif 2 <= turns_per_min < 4 or 15 < turns_per_min <= 25:
+            score += 15
+        else:
+            score += 5
 
-        # Balance metrics (15 points)
-        balance = metrics.get('speaker_balance', {})
-        balance_score = balance.get('balance_score', 0)
-        score += balance_score * 15
-
-        # Response patterns (15 points)
+        # Response patterns (20 points)
         patterns = metrics.get('response_patterns', {})
         efficiency = patterns.get('turn_taking_efficiency', 0)
-        score += min(15, efficiency * 20)
+        score += min(20, efficiency * 25)
 
-        # Sentiment trends (20 points)
+        # Sentiment trends (25 points)
         sentiment = metrics.get('sentiment_trends', {})
         if sentiment:
             avg_sentiments = [data['avg_sentiment'] for data in sentiment.values()]
             if avg_sentiments:
                 avg_sentiment = np.mean(avg_sentiments)
                 if avg_sentiment > 0.2:
-                    score += 15  # Positive sentiment
+                    score += 25  # Positive sentiment
                 elif avg_sentiment < -0.2:
                     score += 5   # Negative sentiment
                 else:
-                    score += 10  # Neutral sentiment
+                    score += 15  # Neutral sentiment
         else:
             score += 5  # Default for no sentiment data
 
         # Penalty for very short conversations
         total_segments = metrics.get('total_segments', 1)
         if total_segments < 3:
-            score = min(score, 50)  # Cap short conversations at 50
+            score = min(score, 50)
 
-        return min(85, max(15, score))  # Realistic range 15-85
+        return min(95, max(15, score))  # Realistic range 15-95
 
     def _generate_recommendations(self, metrics: Dict) -> List[str]:
-        """Generate improvement recommendations."""
+        """Generate improvement recommendations based on measurable metrics."""
         recommendations = []
 
-        # If single speaker, these call-quality recommendations don't apply.
+        # If single speaker, call-quality recommendations don't apply.
         if metrics.get('total_speakers', 1) < 2:
             return recommendations
 
+        # Pacing
         flow = metrics.get('conversation_flow', {})
-        if flow.get('interruption_rate', 0) > 0.3:
-            recommendations.append("High interruption rate detected. Consider improving turn-taking.")
+        turns_per_min = flow.get('turns_per_minute', 0)
+        if turns_per_min > 25:
+            recommendations.append(
+                "Very rapid speaker exchanges detected. Conversations may benefit from longer, more complete turns."
+            )
+        elif turns_per_min < 2 and metrics.get('total_segments', 0) > 3:
+            recommendations.append(
+                "Very few speaker turns detected. Encourage more interactive back-and-forth dialogue."
+            )
 
-        balance = metrics.get('speaker_balance', {})
-        if balance.get('balance_score', 0) < 0.3:
-            recommendations.append("Uneven speaking time distribution. Encourage balanced participation.")
-
+        # Turn length
         patterns = metrics.get('response_patterns', {})
         if patterns.get('avg_turn_length', 0) > 30:
-            recommendations.append("Long speaking turns detected. Consider breaking into shorter segments.")
+            recommendations.append(
+                "Average speaking turns are long (>30 s). Shorter turns improve conversational engagement."
+            )
 
+        # Sentiment
         sentiment = metrics.get('sentiment_trends', {})
         for speaker, data in sentiment.items():
             if data.get('avg_sentiment', 0) < -0.3:
-                recommendations.append(f"Negative sentiment detected for {speaker}. Consider intervention.")
+                recommendations.append(f"Negative sentiment detected for {speaker}. Consider follow-up.")
 
         return recommendations
 
